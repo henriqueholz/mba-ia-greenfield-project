@@ -3,7 +3,7 @@ kind: phase
 name: phase-03-videos
 sources_mtime:
   docs/project-plan.md: "2026-09-16T09:59:03"
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-09-16T11:13:16"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-09-16T11:30:15"
   docs/decisions/technical-decisions-openapi-docs-nestjs.md: "2026-09-16T09:59:03"
   docs/phases/phase-01-configuracao-base/context.md: "2026-09-16T09:59:03"
   docs/phases/phase-02-auth/context.md: "2026-09-16T09:59:03"
@@ -48,14 +48,14 @@ sources_mtime:
 
 | Ref | Source | Scope | Topic | Status | Decision | Libraries |
 |-----|--------|-------|-------|--------|----------|-----------|
-| phase-03-videos/TD-01 | phase | Backend | Object-storage organization and access | pending | — | — |
-| phase-03-videos/TD-02 | phase | Backend | Background-processing queue technology | pending | — | — |
-| phase-03-videos/TD-03 | phase | Backend | 10GB upload strategy (async / direct-to-storage) | pending | — | — |
-| phase-03-videos/TD-04 | phase | Backend | Upload-completion → processing trigger | pending | — | — |
-| phase-03-videos/TD-05 | phase | Backend | Video worker execution model + media processing (FFmpeg) | pending | — | — |
-| phase-03-videos/TD-06 | phase | Backend | Unique public video URL / identifier strategy | pending | — | — |
-| phase-03-videos/TD-07 | phase | Backend | Streaming and download delivery | pending | — | — |
-| phase-03-videos/TD-08 | phase | Backend | Video status lifecycle and failure handling | pending | — | — |
+| phase-03-videos/TD-01 | phase | Backend | Object-storage organization and access | decided | A | @aws-sdk/client-s3, @aws-sdk/s3-request-presigner |
+| phase-03-videos/TD-02 | phase | Backend | Background-processing queue technology | decided | A | bullmq, @nestjs/bullmq, ioredis |
+| phase-03-videos/TD-03 | phase | Backend | 10GB upload strategy (async / direct-to-storage) | decided | A | @aws-sdk/client-s3, @aws-sdk/s3-request-presigner |
+| phase-03-videos/TD-04 | phase | Backend | Upload-completion → processing trigger | decided | A | — |
+| phase-03-videos/TD-05 | phase | Backend | Video worker execution model + media processing (FFmpeg) | decided | A | ffmpeg, ffprobe (system) |
+| phase-03-videos/TD-06 | phase | Backend | Unique public video URL / identifier strategy | decided | B | nanoid |
+| phase-03-videos/TD-07 | phase | Backend | Streaming and download delivery | decided | A | — |
+| phase-03-videos/TD-08 | phase | Backend | Video status lifecycle and failure handling | decided | A | — |
 
 _Source files:_
 
@@ -77,7 +77,45 @@ _Source files:_
 
 ## Decisions Detail
 
-_No decided TDs yet — all 8 TDs of this phase are `pending` (see Decisions Index). Their `**Recommendation:**` prose lives in `docs/decisions/technical-decisions-phase-03-videos.md`; each is locked into a `**Decision:**` by `/plan-resolve`. `/plan-validate` will flag the pending decisions as `MD` (missing decision) issues → status dirty until resolved._
+### phase-03-videos/TD-01
+
+**Recommendation:** AWS SDK v3 keeps a single portable code path from MinIO (dev) to S3 (prod), and its presigned-multipart support is a prerequisite for the 10GB upload in TD-03; one bucket with `videos/`/`thumbnails/` prefixes and opaque id-based keys avoids name collisions and enumeration.
+**Libraries:** @aws-sdk/client-s3, @aws-sdk/s3-request-presigner
+
+### phase-03-videos/TD-02
+
+**Recommendation:** BullMQ's NestJS-native integration, retry/backoff, and worker concurrency fit a long-running video pipeline better than the alternatives, and cleanly separate the API from the worker; Redis is a small, standard Compose addition. Option B (pg-boss) is the strong runner-up if avoiding new infrastructure is prioritized over job-processing ergonomics.
+**Libraries:** bullmq, @nestjs/bullmq, ioredis
+
+### phase-03-videos/TD-03
+
+**Recommendation:** presigned multipart is the only option that keeps a 10GB transfer entirely off the API while natively exceeding the 5GB single-PUT ceiling and giving per-part retry; the `initiate` step is where the draft row is pre-created. tus (B) is a reasonable resumability upgrade later but adds a protocol dependency for a guarantee S3 multipart already provides; C is disqualified by the "sem travar" rule.
+**Libraries:** @aws-sdk/client-s3, @aws-sdk/s3-request-presigner
+
+### phase-03-videos/TD-04
+
+**Recommendation:** an explicit `complete` endpoint is the simplest deterministic trigger, needs no MinIO event wiring, and lets the status transition + enqueue happen together; a lightweight scheduled cleanup of stale `draft` rows (C as a backstop) covers abandoned uploads.
+**Libraries:** —
+
+### phase-03-videos/TD-05
+
+**Recommendation:** a separate worker container running the same image with an FFmpeg install, invoking `ffprobe`/`ffmpeg` via `child_process`, keeps heavy processing off the API, scales independently, and uses the canonical FFmpeg interface; `fluent-ffmpeg` is disqualified by its archival and `ffmpeg.wasm` by performance.
+**Libraries:** ffmpeg (system binary, apt), ffprobe (system binary, apt)
+
+### phase-03-videos/TD-06
+
+**Recommendation:** a dedicated `nanoid` public code gives short, opaque, YouTube-like non-enumerable URLs while keeping the stable uuid PK for internal FKs, with a unique index guaranteeing no conflict. Option A is the zero-cost, equally-correct fallback if URL aesthetics are not valued; C is rejected for enumerability/inconsistency.
+**Libraries:** nanoid
+
+### phase-03-videos/TD-07
+
+**Recommendation:** API-mediated Range/206 keeps the API in control of access and view accounting, matches the phase's explicit 206 framing, and is simplest to test against the Compose stack; note Option B as the production-scalable evolution if API egress becomes a bottleneck.
+**Libraries:** —
+
+### phase-03-videos/TD-08
+
+**Recommendation:** it maps one-to-one to the required lifecycle wording, keeps the enum minimal, and pairs a `failed` terminal state with BullMQ retry/backoff, a stored `failure_reason`, id-keyed idempotency, and a requeue path. Option B can be adopted later if per-step upload progress is surfaced; C is disqualified by the mandated draft state.
+**Libraries:** —
 
 ## Inherited Decisions Detail
 

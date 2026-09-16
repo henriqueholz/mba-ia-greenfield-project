@@ -1,7 +1,7 @@
 ---
 scope_type: phase
 related_phases: [3]
-status: pending
+status: decided
 date: 2026-09-16
 scope_description: "Backend foundation for video upload and processing: object-storage organization, background-job queue technology, 10GB async/direct upload strategy, processing trigger, video worker + FFmpeg metadata/thumbnail extraction, unique public URL, streaming (HTTP Range/206) and download delivery, and the video status lifecycle with failure handling."
 ---
@@ -46,7 +46,8 @@ _Subprojects in scope:_
 
 **Recommendation:** Option A — AWS SDK v3 keeps a single portable code path from MinIO (dev) to S3 (prod), and its presigned-multipart support is a prerequisite for the 10GB upload in TD-03; one bucket with `videos/`/`thumbnails/` prefixes and opaque id-based keys avoids name collisions and enumeration.
 
-**Decision:** _[pending]_
+**Decision:** A (AWS SDK v3, single bucket + prefixed opaque keys)
+**Libraries:** @aws-sdk/client-s3, @aws-sdk/s3-request-presigner
 
 ---
 
@@ -77,7 +78,8 @@ _Subprojects in scope:_
 
 **Recommendation:** Option A — BullMQ's NestJS-native integration, retry/backoff, and worker concurrency fit a long-running video pipeline better than the alternatives, and cleanly separate the API from the worker; Redis is a small, standard Compose addition. Option B (pg-boss) is the strong runner-up if avoiding new infrastructure is prioritized over job-processing ergonomics.
 
-**Decision:** _[pending]_
+**Decision:** A (BullMQ + Redis)
+**Libraries:** bullmq, @nestjs/bullmq, ioredis
 
 ---
 
@@ -108,7 +110,8 @@ _Subprojects in scope:_
 
 **Recommendation:** Option A — presigned multipart is the only option that keeps a 10GB transfer entirely off the API while natively exceeding the 5GB single-PUT ceiling and giving per-part retry; the `initiate` step is where the draft row is pre-created. tus (B) is a reasonable resumability upgrade later but adds a protocol dependency for a guarantee S3 multipart already provides; C is disqualified by the "sem travar" rule.
 
-**Decision:** _[pending]_
+**Decision:** A (presigned multipart, direct-to-storage)
+**Libraries:** @aws-sdk/client-s3, @aws-sdk/s3-request-presigner
 
 ---
 
@@ -139,7 +142,7 @@ _Subprojects in scope:_
 
 **Recommendation:** Option A — an explicit `complete` endpoint is the simplest deterministic trigger, needs no MinIO event wiring, and lets the status transition + enqueue happen together; a lightweight scheduled cleanup of stale `draft` rows (C as a backstop) covers abandoned uploads.
 
-**Decision:** _[pending]_
+**Decision:** A (explicit `complete` endpoint enqueues the job; scheduled cleanup of stale drafts as backstop)
 
 ---
 
@@ -170,7 +173,8 @@ _Subprojects in scope:_
 
 **Recommendation:** Option A — a separate worker container running the same image with an FFmpeg install, invoking `ffprobe`/`ffmpeg` via `child_process`, keeps heavy processing off the API, scales independently, and uses the canonical FFmpeg interface; `fluent-ffmpeg` is disqualified by its archival and `ffmpeg.wasm` by performance.
 
-**Decision:** _[pending]_
+**Decision:** A (separate worker container + `child_process` ffmpeg/ffprobe; ffmpeg installed in the worker image)
+**Libraries:** ffmpeg (system binary, apt), ffprobe (system binary, apt)
 
 ---
 
@@ -201,7 +205,8 @@ _Subprojects in scope:_
 
 **Recommendation:** Option B — a dedicated `nanoid` public code gives short, opaque, YouTube-like non-enumerable URLs while keeping the stable uuid PK for internal FKs, with a unique index guaranteeing no conflict. Option A is the zero-cost, equally-correct fallback if URL aesthetics are not valued; C is rejected for enumerability/inconsistency.
 
-**Decision:** _[pending]_
+**Decision:** B (`nanoid` public code + uuid PK)
+**Libraries:** nanoid
 
 ---
 
@@ -232,7 +237,7 @@ _Subprojects in scope:_
 
 **Recommendation:** Option A for both streaming and download — API-mediated Range/206 keeps the API in control of access and view accounting, matches the phase's explicit 206 framing, and is simplest to test against the Compose stack; note Option B as the production-scalable evolution if API egress becomes a bottleneck.
 
-**Decision:** _[pending]_
+**Decision:** A (API-mediated HTTP Range → 206 Partial Content for streaming and download; presigned-direct noted as future scale path)
 
 ---
 
@@ -263,7 +268,7 @@ _Subprojects in scope:_
 
 **Recommendation:** Option A — it maps one-to-one to the required lifecycle wording, keeps the enum minimal, and pairs a `failed` terminal state with BullMQ retry/backoff, a stored `failure_reason`, id-keyed idempotency, and a requeue path. Option B can be adopted later if per-step upload progress is surfaced; C is disqualified by the mandated draft state.
 
-**Decision:** _[pending]_
+**Decision:** A (draft → processing → ready | failed; BullMQ retry + backoff, `failure_reason` stored, job keyed by video id for idempotency, requeue path)
 
 ---
 
@@ -271,11 +276,11 @@ _Subprojects in scope:_
 
 | ID | Scope | Decision | Recommendation | Choice |
 |----|-------|----------|----------------|--------|
-| TD-01 | Backend | Object-storage organization and access | Option A — AWS SDK v3, single bucket, prefixed opaque keys | _[pending]_ |
-| TD-02 | Backend | Background-processing queue technology | Option A — BullMQ + Redis (`@nestjs/bullmq`) | _[pending]_ |
-| TD-03 | Backend | 10GB upload strategy (async/direct) | Option A — presigned multipart direct to storage | _[pending]_ |
-| TD-04 | Backend | Upload-completion → processing trigger | Option A — explicit `complete` endpoint enqueues job | _[pending]_ |
-| TD-05 | Backend | Worker execution model + FFmpeg processing | Option A — separate worker container + `child_process` ffmpeg/ffprobe | _[pending]_ |
-| TD-06 | Backend | Unique public video URL / identifier | Option B — `nanoid` public code + uuid PK | _[pending]_ |
-| TD-07 | Backend | Streaming and download delivery | Option A — API-mediated Range/206 (presigned as future scale path) | _[pending]_ |
-| TD-08 | Backend | Video status lifecycle and failure handling | Option A — draft→processing→ready\|failed + retry/failure_reason | _[pending]_ |
+| TD-01 | Backend | Object-storage organization and access | Option A — AWS SDK v3, single bucket, prefixed opaque keys | A |
+| TD-02 | Backend | Background-processing queue technology | Option A — BullMQ + Redis (`@nestjs/bullmq`) | A |
+| TD-03 | Backend | 10GB upload strategy (async/direct) | Option A — presigned multipart direct to storage | A |
+| TD-04 | Backend | Upload-completion → processing trigger | Option A — explicit `complete` endpoint enqueues job | A |
+| TD-05 | Backend | Worker execution model + FFmpeg processing | Option A — separate worker container + `child_process` ffmpeg/ffprobe | A |
+| TD-06 | Backend | Unique public video URL / identifier | Option B — `nanoid` public code + uuid PK | B |
+| TD-07 | Backend | Streaming and download delivery | Option A — API-mediated Range/206 (presigned as future scale path) | A |
+| TD-08 | Backend | Video status lifecycle and failure handling | Option A — draft→processing→ready\|failed + retry/failure_reason | A |
