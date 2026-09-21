@@ -1,6 +1,6 @@
 services:
   nestjs-api:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile.dev
     ports:
@@ -12,6 +12,31 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_started
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      createbuckets:
+        condition: service_completed_successfully
+
+  video-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/home/node/app
+    # The worker bootstrap command (npm run start:worker:dev) is wired in SI-03.7.
+    # Until then the container stays alive via the image CMD (tail -f /dev/null),
+    # following the same exec-based convention as nestjs-api.
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      createbuckets:
+        condition: service_completed_successfully
 
   db:
     image: postgres:17
@@ -33,4 +58,40 @@ services:
       - "1025:1025"
       - "8025:8025"
 
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
+  minio:
+    image: quay.io/minio/minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=streamtube
+      - MINIO_ROOT_PASSWORD=streamtube
+    volumes:
+      - minio-data:/data
+
+  # One-shot bootstrap: waits for MinIO and creates the streamtube bucket (idempotent).
+  createbuckets:
+    image: quay.io/minio/mc
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc alias set local http://minio:9000 streamtube streamtube) do echo 'waiting for minio...'; sleep 1; done;
+      /usr/bin/mc mb --ignore-existing local/streamtube;
+      exit 0;
+      "
+
+volumes:
+  minio-data:

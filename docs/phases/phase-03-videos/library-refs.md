@@ -13,13 +13,15 @@ libs:
     context7_id: "unavailable — sourced from npm registry"
     fetched_at: "2026-09-16T11:33:00"
   "@nestjs/bullmq":
-    version: "^12.0.0"
+    version: "^11.0.5"
     context7_id: "unavailable — sourced from npm registry"
     fetched_at: "2026-09-16T11:33:00"
+    note: "Pinned to v11 (not v12) at implementation time — v12 is ESM-only (\"type\": \"module\") and breaks Jest's CommonJS loader in this CJS project. v11.0.5 is CJS and peers bullmq ^6 + @nestjs/core ^11."
   ioredis:
-    version: "^6.0.0"
+    version: "^5.4.1"
     context7_id: "unavailable — sourced from npm registry"
     fetched_at: "2026-09-16T11:33:00"
+    note: "Pinned to v5 (not v6) — typeorm's peerOptional is ioredis@^5.0.4; v6 caused ERESOLVE. bullmq needs ioredis installed explicitly (peerOptional). ioredis@5.11.1 satisfies both."
   nanoid:
     version: "^3.3.19"
     context7_id: "unavailable — sourced from npm registry"
