@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 5/9 completed
+**SIs:** 6/9 completed
 
 ### SI-03.1 — Infra: object storage, fila e worker no Docker Compose
 - **Status:** completed
@@ -43,9 +43,13 @@
   - Test is `integration-spec` (real Redis connection), not a unit `spec`, per the project's test-type rule (BullMQ opens a Redis connection). Queue name/job constants in `src/queue/queue.constants.ts`.
 
 ### SI-03.6 — Endpoints de upload (initiate / complete / delete)
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 15 passing (videos.service.spec.ts: 5 unit; videos.service.integration-spec.ts: 3; videos-upload.e2e-spec.ts: 7)
+- **Observations:**
+  - Added `ChannelsService.findByUserId` (SRP: channel lookup stays in the channels domain rather than VideosService querying the Channel repo directly).
+  - `public_id` via `nanoid@3` `customAlphabet` (11 chars). Part size 100 MiB (≤~103 parts at 10 GiB).
+  - VideosModule compilation is asserted inside `videos.service.integration-spec.ts` (a pure unit `.spec.ts` can't compile the module — it needs real TypeORM + BullMQ), rather than a misclassified module spec.
+  - Size >10 GiB throws the domain `VIDEO_UPLOAD_TOO_LARGE` (400) in the service, not a generic validation error.
 
 ### SI-03.7 — Worker de vídeo (processamento FFmpeg)
 - **Status:** pending
