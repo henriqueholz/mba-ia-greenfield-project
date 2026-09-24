@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Queue } from 'bullmq';
 import { customAlphabet } from 'nanoid';
+import type { Readable } from 'stream';
 import { Repository } from 'typeorm';
 import { ChannelsService } from '../channels/channels.service';
 import {
@@ -17,10 +18,12 @@ import {
 } from './dto/initiate-upload.dto';
 import { Video, VideoStatus } from './entities/video.entity';
 import {
+  InvalidRangeException,
   UploadCompletionFailedException,
   VideoInvalidStateException,
   VideoNotFoundException,
   VideoNotOwnedException,
+  VideoNotReadyException,
   VideoUploadTooLargeException,
 } from './video.exceptions';
 
@@ -37,6 +40,29 @@ export interface InitiateUploadResult {
   partSize: number;
   parts: { partNumber: number; url: string }[];
 }
+
+export interface VideoMetadataResult {
+  id: string;
+  title: string;
+  status: VideoStatus;
+  durationSeconds: number | null;
+  width: number | null;
+  height: number | null;
+  thumbnailUrl: string | null;
+  channelId: string;
+  createdAt: Date;
+}
+
+export interface VideoStreamResult {
+  stream: Readable;
+  contentType: string;
+  contentLength: number;
+  contentRange?: string;
+  status: 200 | 206;
+  filename: string;
+}
+
+const RANGE_HEADER_PATTERN = /^bytes=\d*-\d*$/;
 
 @Injectable()
 export class VideosService {
@@ -144,6 +170,112 @@ export class VideosService {
     }
     await this.storage.deleteObjects(keys).catch(() => undefined);
     await this.videos.delete({ id: video.id });
+  }
+
+  async getMetadata(
+    publicId: string,
+    userId?: string,
+  ): Promise<VideoMetadataResult> {
+    const video = await this.resolveViewable(
+      publicId,
+      userId,
+      () => new VideoNotFoundException(),
+    );
+    return {
+      id: video.public_id,
+      title: video.title,
+      status: video.status,
+      durationSeconds: video.duration_seconds,
+      width: video.width,
+      height: video.height,
+      thumbnailUrl: video.thumbnail_key
+        ? `/videos/${video.public_id}/thumbnail`
+        : null,
+      channelId: video.channel_id,
+      createdAt: video.created_at,
+    };
+  }
+
+  async stream(
+    publicId: string,
+    userId: string | undefined,
+    range: string | undefined,
+  ): Promise<VideoStreamResult> {
+    const video = await this.resolveViewable(
+      publicId,
+      userId,
+      () => new VideoNotReadyException(),
+    );
+    if (range && !RANGE_HEADER_PATTERN.test(range)) {
+      throw new InvalidRangeException();
+    }
+    try {
+      const object = await this.storage.getObject(video.storage_key, range);
+      return {
+        stream: object.body,
+        contentType: object.contentType,
+        contentLength: object.contentLength,
+        contentRange: object.contentRange,
+        status: range ? 206 : 200,
+        filename: video.original_filename ?? `${video.public_id}.mp4`,
+      };
+    } catch (err) {
+      if (this.isRangeNotSatisfiable(err)) {
+        throw new InvalidRangeException();
+      }
+      throw err;
+    }
+  }
+
+  async getThumbnail(
+    publicId: string,
+    userId?: string,
+  ): Promise<{ stream: Readable; contentType: string; contentLength: number }> {
+    const video = await this.resolveViewable(
+      publicId,
+      userId,
+      () => new VideoNotReadyException(),
+    );
+    if (!video.thumbnail_key) {
+      throw new VideoNotFoundException();
+    }
+    const object = await this.storage.getObject(video.thumbnail_key);
+    return {
+      stream: object.body,
+      contentType: object.contentType,
+      contentLength: object.contentLength,
+    };
+  }
+
+  /**
+   * Resolves a video for viewing: ready videos are visible to everyone, while
+   * non-ready videos are visible only to their owner. Otherwise `notVisible()`
+   * is thrown (404 for metadata, 409 for media endpoints).
+   */
+  private async resolveViewable(
+    publicId: string,
+    userId: string | undefined,
+    notVisible: () => Error,
+  ): Promise<Video> {
+    const video = await this.videos.findOne({ where: { public_id: publicId } });
+    if (!video) {
+      throw new VideoNotFoundException();
+    }
+    if (video.status === VideoStatus.READY) {
+      return video;
+    }
+    if (userId) {
+      const channel = await this.channels.findByUserId(userId);
+      if (channel && channel.id === video.channel_id) {
+        return video;
+      }
+    }
+    throw notVisible();
+  }
+
+  private isRangeNotSatisfiable(err: unknown): boolean {
+    const e = err as { name?: string; $metadata?: { httpStatusCode?: number } };
+    return e.name === 'InvalidRange' || e.$metadata?.httpStatusCode === 416;
   }
 
   private async findOwnedVideo(

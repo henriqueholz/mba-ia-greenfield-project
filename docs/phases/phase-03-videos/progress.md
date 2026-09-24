@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 7/9 completed
+**SIs:** 8/9 completed
 
 ### SI-03.1 — Infra: object storage, fila e worker no Docker Compose
 - **Status:** completed
@@ -62,9 +62,12 @@
   - Open-handle warning may appear on the full suite (BullMQ/S3 keep-alive sockets) — will confirm `npm test` exits at final verification.
 
 ### SI-03.8 — Endpoints de streaming, download, thumbnail e metadados
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 19 passing (videos.service.spec.ts: +6 read-visibility = 11 unit; videos-playback.e2e-spec.ts: 8)
+- **Observations:**
+  - Added `OptionalJwtGuard` (populates `request.user` if a valid token is present, never rejects) so the public read endpoints serve `ready` videos anonymously while the owner can still see their own non-ready videos. `VideosModule` imports `AuthModule` for `JwtService`.
+  - Streaming uses direct `res.pipe` (not `StreamableFile`) for reliable Range/206 header control; `getObject(key, range)` from storage drives `Content-Range`/`Content-Length`/status.
+  - Media endpoints (stream/download/thumbnail) 409 `VIDEO_NOT_READY` for non-ready non-owner; metadata 404s (no existence leak); malformed Range → 416 `INVALID_RANGE`.
 
 ### SI-03.9 — Backstop: limpeza de rascunhos abandonados
 - **Status:** pending

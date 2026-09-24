@@ -7,8 +7,11 @@ import { VIDEO_PROCESSING_QUEUE } from '../queue/queue.constants';
 import { MAX_VIDEO_SIZE_BYTES } from './dto/initiate-upload.dto';
 import { Video, VideoStatus } from './entities/video.entity';
 import {
+  InvalidRangeException,
   VideoInvalidStateException,
+  VideoNotFoundException,
   VideoNotOwnedException,
+  VideoNotReadyException,
   VideoUploadTooLargeException,
 } from './video.exceptions';
 import { VideosService } from './videos.service';
@@ -28,6 +31,7 @@ describe('VideosService', () => {
     completeMultipartUpload: jest.fn(),
     abortMultipartUpload: jest.fn(),
     deleteObjects: jest.fn(),
+    getObject: jest.fn(),
   };
   const queue = { add: jest.fn() };
 
@@ -138,6 +142,80 @@ describe('VideosService', () => {
         { videoId: 'v1' },
         expect.objectContaining({ jobId: 'v1', attempts: 3 }),
       );
+    });
+  });
+
+  describe('read / streaming visibility', () => {
+    const readyVideo = {
+      id: 'v1',
+      public_id: 'pub',
+      channel_id: 'chan-A',
+      title: 'T',
+      status: VideoStatus.READY,
+      storage_key: 'videos/pub/original',
+      original_filename: 'clip.mp4',
+      duration_seconds: 5,
+      width: 128,
+      height: 72,
+      thumbnail_key: 'thumbnails/pub.jpg',
+      created_at: new Date(),
+    };
+
+    it('serves metadata of a ready video to anonymous viewers', async () => {
+      videosRepo.findOne.mockResolvedValue(readyVideo);
+      const meta = await service.getMetadata('pub', undefined);
+      expect(meta.status).toBe(VideoStatus.READY);
+      expect(meta.thumbnailUrl).toBe('/videos/pub/thumbnail');
+    });
+
+    it('hides a non-ready video from anonymous viewers (404)', async () => {
+      videosRepo.findOne.mockResolvedValue({
+        ...readyVideo,
+        status: VideoStatus.PROCESSING,
+      });
+      await expect(
+        service.getMetadata('pub', undefined),
+      ).rejects.toBeInstanceOf(VideoNotFoundException);
+    });
+
+    it('lets the owner see a non-ready video', async () => {
+      videosRepo.findOne.mockResolvedValue({
+        ...readyVideo,
+        status: VideoStatus.PROCESSING,
+      });
+      channels.findByUserId.mockResolvedValue({ id: 'chan-A' });
+      const meta = await service.getMetadata('pub', 'user-1');
+      expect(meta.status).toBe(VideoStatus.PROCESSING);
+    });
+
+    it('rejects streaming a non-ready video for anonymous with VideoNotReadyException', async () => {
+      videosRepo.findOne.mockResolvedValue({
+        ...readyVideo,
+        status: VideoStatus.PROCESSING,
+      });
+      await expect(
+        service.stream('pub', undefined, undefined),
+      ).rejects.toBeInstanceOf(VideoNotReadyException);
+    });
+
+    it('throws InvalidRangeException on a malformed Range header', async () => {
+      videosRepo.findOne.mockResolvedValue(readyVideo);
+      await expect(
+        service.stream('pub', undefined, 'bytes=abc'),
+      ).rejects.toBeInstanceOf(InvalidRangeException);
+    });
+
+    it('returns 206 with a Content-Range for a valid range request', async () => {
+      videosRepo.findOne.mockResolvedValue(readyVideo);
+      storage.getObject.mockResolvedValue({
+        body: {},
+        contentType: 'video/mp4',
+        contentLength: 5,
+        contentRange: 'bytes 0-4/20',
+      });
+      const res = await service.stream('pub', undefined, 'bytes=0-4');
+      expect(res.status).toBe(206);
+      expect(res.contentRange).toBe('bytes 0-4/20');
     });
   });
 });
