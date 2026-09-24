@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 6/9 completed
+**SIs:** 7/9 completed
 
 ### SI-03.1 — Infra: object storage, fila e worker no Docker Compose
 - **Status:** completed
@@ -52,9 +52,14 @@
   - Size >10 GiB throws the domain `VIDEO_UPLOAD_TOO_LARGE` (400) in the service, not a generic validation error.
 
 ### SI-03.7 — Worker de vídeo (processamento FFmpeg)
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 6 passing (media.service.integration-spec.ts: 2 real-ffmpeg; video.processor.integration-spec.ts: 3 real DB+MinIO+ffmpeg; worker.module.integration-spec.ts: 1)
+- **Observations:**
+  - Fixed a real WorkerModule boot bug: `Video→Channel→User` relations require all three entity metadatas in `forFeature` (the worker only queries Video, but TypeORM needs the graph). The worker container would have crashed on boot without this.
+  - `worker.module.integration-spec` closes the BullMQ worker's blocking Redis connection explicitly in teardown (`processor.worker.close()`) so Jest exits without a project-wide `--forceExit`.
+  - Worker container runs via compose `command: npm run start:worker:dev` and logs "Video worker started and consuming the queue"; stopped during dev test runs (DB resets) and brought back for final verification.
+  - Processor: download → ffprobe (duration/dims/metadata) → ffmpeg thumbnail → status=ready; `@OnWorkerEvent('failed')` marks status=failed + failure_reason only after retries exhausted; idempotent (skips if already ready).
+  - Open-handle warning may appear on the full suite (BullMQ/S3 keep-alive sockets) — will confirm `npm test` exits at final verification.
 
 ### SI-03.8 — Endpoints de streaming, download, thumbnail e metadados
 - **Status:** pending

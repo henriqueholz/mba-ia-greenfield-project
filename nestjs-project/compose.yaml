@@ -25,9 +25,7 @@ services:
       dockerfile: Dockerfile.dev
     volumes:
       - .:/home/node/app
-    # The worker bootstrap command (npm run start:worker:dev) is wired in SI-03.7.
-    # Until then the container stays alive via the image CMD (tail -f /dev/null),
-    # following the same exec-based convention as nestjs-api.
+    command: sh -c "npm run start:worker:dev"
     depends_on:
       db:
         condition: service_healthy
