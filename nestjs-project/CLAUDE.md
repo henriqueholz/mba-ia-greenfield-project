@@ -34,6 +34,11 @@ docker compose exec nestjs-api npm run start:dev
 Services:
 - `nestjs-api` — NestJS API, port `3000`
 - `db` — PostgreSQL 17, port `5432`, database `streamtube`, user/password `streamtube`
+- `redis` — Redis 7, port `6379` — BullMQ broker for video processing (Phase 03)
+- `minio` — S3-compatible object storage, API `9000` / console `9001`, user/password `streamtube` (Phase 03)
+- `createbuckets` — one-shot init that creates the `streamtube` bucket in MinIO, then exits
+- `video-worker` — separate NestJS process (same image) that consumes the `video-processing` queue and runs FFmpeg; started by its Compose `command` (`npm run start:worker:dev`)
+- `mailpit` — SMTP capture for local email, SMTP `1025` / UI `8025`
 
 All verification and teardown commands run on the **host machine**:
 
@@ -148,6 +153,47 @@ NestJS with standard module structure. Source lives in `src/`, compiled output i
 
 - Each domain feature gets its own module (e.g., `UsersModule`, `VideosModule`) registered in `AppModule`
 - Controllers handle HTTP routing; Services hold business logic; both are scoped to their module
+
+## Video Module (Phase 03)
+
+Upload, processing, streaming and download of videos. A video belongs to a `Channel` (phase 02, 1:1 with `User`).
+
+### Structure
+
+- `src/videos/` — `VideosModule`, `VideosService`, `VideosController`, `Video` entity (`videos` table), DTOs, domain exceptions, `DraftCleanupService`, and `OptionalJwtGuard` (public read routes that still identify an authenticated owner).
+- `src/storage/` — `StorageService` (AWS SDK v3 S3 client against MinIO/S3): bucket bootstrap (`OnModuleInit`), presigned **multipart** upload, byte-range `getObject`, `putObject`, delete. Single bucket (`STORAGE_BUCKET`), keys `videos/<publicId>/original` and `thumbnails/<publicId>.jpg`.
+- `src/queue/` — `QueueModule` (BullMQ over Redis) registering the `video-processing` queue; job name `process-video`, payload `{ videoId }`.
+- `src/worker/` — `WorkerModule` + `main.worker.ts` (standalone process, run as the `video-worker` container). `VideoProcessor` (BullMQ `WorkerHost`) downloads the object, runs `ffprobe` (duration/metadata) + `ffmpeg` (thumbnail) via `child_process`, uploads the thumbnail and sets `status=ready`; on retry exhaustion it sets `status=failed` + `failure_reason`. `MediaService` wraps the FFmpeg binaries (installed in the image).
+
+### Endpoints
+
+| Method | Path | Auth | Notes |
+|--------|------|------|-------|
+| POST | `/videos` | owner (auth) | Initiate: pre-registers a `draft` + returns presigned multipart part URLs |
+| POST | `/videos/:publicId/complete` | owner | Finalizes multipart, `draft→processing`, enqueues `process-video` |
+| DELETE | `/videos/:publicId` | owner | Aborts multipart + removes objects + row |
+| GET | `/videos/:publicId` | public* | Metadata (JSON) |
+| GET | `/videos/:publicId/stream` | public* | HTTP `Range` → `206 Partial Content` (else `200`) |
+| GET | `/videos/:publicId/download` | public* | `Content-Disposition: attachment` |
+| GET | `/videos/:publicId/thumbnail` | public* | `image/jpeg` |
+
+*Public read routes serve `ready` videos to anyone; the owner (optional Bearer token) additionally sees their own non-ready videos. Non-ready for others → `404` (metadata) / `409 VIDEO_NOT_READY` (media); bad `Range` → `416 INVALID_RANGE`.
+
+### Status lifecycle
+
+`draft` (initiate) → `processing` (complete/enqueue) → `ready` (worker success) | `failed` (retries exhausted). The public id is a `nanoid` (11 chars) stored in `public_id`.
+
+### 10GB upload strategy
+
+The file never passes through the API: the client uploads parts **directly to storage** via presigned URLs (S3 multipart, part size 100 MiB, ≤ 10 GiB), then calls `complete` with the part ETags. See `docs/phases/phase-03-videos/` for the full plan and decisions.
+
+### Running the worker
+
+The `video-worker` container auto-runs `npm run start:worker:dev`. To run it manually: `docker compose exec video-worker npm run start:worker:dev` (or `npm run start:worker` / `start:worker:prod`).
+
+### New env vars
+
+`STORAGE_ENDPOINT`, `STORAGE_PORT`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`, `STORAGE_BUCKET`, `STORAGE_REGION`, `REDIS_HOST`, `REDIS_PORT` — see `.env.example` (Compose service names as hosts: `minio`, `redis`).
 
 ## Code Conventions
 

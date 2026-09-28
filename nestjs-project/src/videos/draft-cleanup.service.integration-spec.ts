@@ -8,6 +8,7 @@ import databaseConfig from '../config/database.config';
 import storageConfig from '../config/storage.config';
 import { StorageModule } from '../storage/storage.module';
 import { StorageService } from '../storage/storage.service';
+import { cleanAllTables } from '../test/create-test-data-source';
 import { User } from '../users/entities/user.entity';
 import { DRAFT_TTL_MS, DraftCleanupService } from './draft-cleanup.service';
 import { Video, VideoStatus } from './entities/video.entity';
@@ -62,10 +63,7 @@ describe('DraftCleanupService (integration)', () => {
   });
 
   let counter = 0;
-  async function seedVideo(
-    status: VideoStatus,
-    ageMs: number,
-  ): Promise<Video> {
+  async function seedVideo(status: VideoStatus, ageMs: number): Promise<Video> {
     const user = await users.save(
       users.create({ email: `clean_${++counter}@example.com`, password: 'h' }),
     );
@@ -98,8 +96,7 @@ describe('DraftCleanupService (integration)', () => {
 
   beforeEach(async () => {
     await dataSource.query('DELETE FROM videos');
-    await dataSource.query('DELETE FROM channels');
-    await dataSource.query('DELETE FROM users');
+    await cleanAllTables(dataSource);
   });
 
   it('removes a stale draft past the TTL', async () => {
@@ -117,7 +114,9 @@ describe('DraftCleanupService (integration)', () => {
 
     await service.cleanupStaleDrafts();
 
-    expect(await videos.findOne({ where: { id: freshDraft.id } })).not.toBeNull();
+    expect(
+      await videos.findOne({ where: { id: freshDraft.id } }),
+    ).not.toBeNull();
     expect(await videos.findOne({ where: { id: readyOld.id } })).not.toBeNull();
   });
 });

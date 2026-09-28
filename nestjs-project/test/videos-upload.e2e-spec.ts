@@ -53,10 +53,17 @@ describe('Videos upload (e2e)', () => {
 
   async function registerConfirmAndLogin(email: string): Promise<string> {
     const authService = app.get(AuthService);
-    const mailService = (authService as { mailService: unknown })
-      .mailService as {
-      sendConfirmationEmail: (e: string, n: string, t: string) => Promise<void>;
-    };
+    const mailService = (
+      authService as unknown as {
+        mailService: {
+          sendConfirmationEmail: (
+            e: string,
+            n: string,
+            t: string,
+          ) => Promise<void>;
+        };
+      }
+    ).mailService;
     let token = '';
     jest
       .spyOn(mailService, 'sendConfirmationEmail')
@@ -66,7 +73,9 @@ describe('Videos upload (e2e)', () => {
     await request(app.getHttpServer())
       .post('/auth/register')
       .send({ email, password: 'password123' });
-    await request(app.getHttpServer()).get('/auth/confirm-email').query({ token });
+    await request(app.getHttpServer())
+      .get('/auth/confirm-email')
+      .query({ token });
     const res = await request(app.getHttpServer())
       .post('/auth/login')
       .send({ email, password: 'password123' });
@@ -158,7 +167,10 @@ describe('Videos upload (e2e)', () => {
     const res = await request(app.getHttpServer())
       .post(`/videos/${initiated.body.id}/complete`)
       .set('Authorization', `Bearer ${otherToken}`)
-      .send({ uploadId: initiated.body.uploadId, parts: [{ partNumber: 1, etag: 'x' }] })
+      .send({
+        uploadId: initiated.body.uploadId,
+        parts: [{ partNumber: 1, etag: 'x' }],
+      })
       .expect(403);
     expect(res.body.error).toBe('VIDEO_NOT_OWNED');
 

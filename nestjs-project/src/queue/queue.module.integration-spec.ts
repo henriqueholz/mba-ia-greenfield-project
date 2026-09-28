@@ -29,7 +29,9 @@ describe('QueueModule (integration)', () => {
   });
 
   it('should register the video-processing queue and enqueue a job on Redis', async () => {
-    const job = await queue.add(PROCESS_VIDEO_JOB, { videoId: 'test-video-id' });
+    const job = await queue.add(PROCESS_VIDEO_JOB, {
+      videoId: 'test-video-id',
+    });
     expect(job.id).toBeDefined();
 
     const fetched = await queue.getJob(job.id as string);

@@ -71,7 +71,10 @@ export class StorageService implements OnModuleInit {
       this.logger.log(`Created bucket "${this.bucket}"`);
     } catch (err) {
       const name = (err as { name?: string }).name;
-      if (name !== 'BucketAlreadyOwnedByYou' && name !== 'BucketAlreadyExists') {
+      if (
+        name !== 'BucketAlreadyOwnedByYou' &&
+        name !== 'BucketAlreadyExists'
+      ) {
         throw err;
       }
     }

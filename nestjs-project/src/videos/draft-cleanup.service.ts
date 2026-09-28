@@ -34,7 +34,9 @@ export class DraftCleanupService {
           .abortMultipartUpload(video.storage_key, video.upload_id)
           .catch(() => undefined);
       }
-      await this.storage.deleteObjects([video.storage_key]).catch(() => undefined);
+      await this.storage
+        .deleteObjects([video.storage_key])
+        .catch(() => undefined);
       await this.videos.delete({ id: video.id });
     }
 

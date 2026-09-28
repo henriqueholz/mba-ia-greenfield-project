@@ -87,7 +87,11 @@ describe('Videos playback (e2e)', () => {
     let thumbnailKey: string | null = null;
     if (withThumbnail) {
       thumbnailKey = `thumbnails/${publicId}.jpg`;
-      await storage.putObject(thumbnailKey, Buffer.from('JPEGDATA'), 'image/jpeg');
+      await storage.putObject(
+        thumbnailKey,
+        Buffer.from('JPEGDATA'),
+        'image/jpeg',
+      );
     }
     await videos.save(
       videos.create({

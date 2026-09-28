@@ -39,6 +39,13 @@ describe('Database migrations (integration)', () => {
       ),
       dataSource.query(`DROP TABLE IF EXISTS "migrations" CASCADE`),
     ]);
+    // Enum types are not dropped by DROP TABLE; clear them so this migration's
+    // CREATE TYPE does not collide with types left behind by synchronize-based
+    // suites that ran earlier in the shared DB.
+    await dataSource.query(
+      `DROP TYPE IF EXISTS "verification_tokens_type_enum" CASCADE`,
+    );
+    await dataSource.query(`DROP TYPE IF EXISTS "videos_status_enum" CASCADE`);
   });
 
   afterAll(async () => {
@@ -108,9 +115,7 @@ describe('CreateVideos migration (integration)', () => {
     ]);
     // Enum types are not dropped by DROP TABLE; clear them so CREATE TYPE in the
     // migrations does not collide with types left by synchronize-based suites.
-    await dataSource.query(
-      `DROP TYPE IF EXISTS "videos_status_enum" CASCADE`,
-    );
+    await dataSource.query(`DROP TYPE IF EXISTS "videos_status_enum" CASCADE`);
     await dataSource.query(
       `DROP TYPE IF EXISTS "verification_tokens_type_enum" CASCADE`,
     );

@@ -1,7 +1,16 @@
 # phase-03-videos — Progress
 
-**Status:** in_progress
+**Status:** completed
 **SIs:** 9/9 completed
+
+## Definition of Done (verified 2026-09-27)
+
+- Unit + integration: **187/187 passing** (`npm test -- --runInBand`, exits clean, no `--forceExit`).
+- E2E: **67/67 passing** (`npm run test:e2e`; added `maxWorkers: 1` to `test/jest-e2e.json` so the shared-DB suites run serially per CLAUDE.md).
+- `npx tsc --noEmit`: exit 0.
+- `npm run lint`: exit 0 (0 errors, ~220 warnings — the `any`-family rules are advisory per the phase-baseline lint alignment).
+- All services up via `docker compose` (db, redis, minio, createbuckets, nestjs-api, video-worker); worker logs "Video worker started and consuming the queue".
+- Full-suite fixes made during verification: block-1 of `migrations.integration-spec` now drops leftover enum types (synchronize-suite leakage); the 3 videos/worker integration specs use `cleanAllTables` (FK-safe cross-suite cleanup); `jest-e2e.json` `maxWorkers: 1`.
 
 ### SI-03.1 — Infra: object storage, fila e worker no Docker Compose
 - **Status:** completed

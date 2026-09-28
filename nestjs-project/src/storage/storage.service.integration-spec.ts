@@ -18,7 +18,9 @@ describe('StorageService (integration)', () => {
 
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({
-      imports: [ConfigModule.forRoot({ isGlobal: true, load: [storageConfig] })],
+      imports: [
+        ConfigModule.forRoot({ isGlobal: true, load: [storageConfig] }),
+      ],
       providers: [StorageService],
     }).compile();
     service = moduleRef.get(StorageService);

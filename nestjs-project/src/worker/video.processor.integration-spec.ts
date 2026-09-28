@@ -14,6 +14,7 @@ import databaseConfig from '../config/database.config';
 import storageConfig from '../config/storage.config';
 import { StorageModule } from '../storage/storage.module';
 import { StorageService } from '../storage/storage.service';
+import { cleanAllTables } from '../test/create-test-data-source';
 import { User } from '../users/entities/user.entity';
 import { Video, VideoStatus } from '../videos/entities/video.entity';
 import { MediaService } from './media.service';
@@ -22,7 +23,10 @@ import { VideoProcessor } from './video.processor';
 
 const execFileAsync = promisify(execFile);
 
-function fakeJob(videoId: string, extra: Partial<Job> = {}): Job<ProcessVideoJobData> {
+function fakeJob(
+  videoId: string,
+  extra: Partial<Job> = {},
+): Job<ProcessVideoJobData> {
   return {
     data: { videoId },
     opts: { attempts: 3 },
@@ -98,10 +102,7 @@ describe('VideoProcessor (integration, real DB+MinIO+ffmpeg)', () => {
   });
 
   let counter = 0;
-  async function seedVideo(
-    status: VideoStatus,
-    body: Buffer,
-  ): Promise<Video> {
+  async function seedVideo(status: VideoStatus, body: Buffer): Promise<Video> {
     const user = await users.save(
       users.create({
         email: `proc_${++counter}@example.com`,
@@ -131,8 +132,7 @@ describe('VideoProcessor (integration, real DB+MinIO+ffmpeg)', () => {
 
   beforeEach(async () => {
     await dataSource.query('DELETE FROM videos');
-    await dataSource.query('DELETE FROM channels');
-    await dataSource.query('DELETE FROM users');
+    await cleanAllTables(dataSource);
   });
 
   it('processes a valid video → ready with duration, dimensions and thumbnail', async () => {

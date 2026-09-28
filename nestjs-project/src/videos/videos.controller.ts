@@ -10,7 +10,12 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import type { JwtPayload } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -27,19 +32,22 @@ import type { VideoStatus } from './entities/video.entity';
 import { OptionalJwtGuard } from './guards/optional-jwt.guard';
 
 @ApiTags('videos')
-@ApiBearerAuth()
 @Controller('videos')
 export class VideosController {
   constructor(private readonly videosService: VideosService) {}
 
   @Post()
   @HttpCode(201)
+  @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: 'Initiate a video upload',
     description:
       'Pre-registers the video as a draft and returns presigned multipart URLs so the client uploads directly to storage.',
   })
-  @ApiResponse({ status: 201, description: 'Draft created with presigned parts' })
+  @ApiResponse({
+    status: 201,
+    description: 'Draft created with presigned parts',
+  })
   initiate(
     @CurrentUser() user: JwtPayload,
     @Body() dto: InitiateUploadDto,
@@ -49,12 +57,16 @@ export class VideosController {
 
   @Post(':publicId/complete')
   @HttpCode(200)
+  @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: 'Complete a video upload',
     description:
       'Finalizes the multipart upload, transitions the video to processing and enqueues the processing job.',
   })
-  @ApiResponse({ status: 200, description: 'Upload completed; video is processing' })
+  @ApiResponse({
+    status: 200,
+    description: 'Upload completed; video is processing',
+  })
   complete(
     @CurrentUser() user: JwtPayload,
     @Param('publicId') publicId: string,
@@ -65,6 +77,7 @@ export class VideosController {
 
   @Delete(':publicId')
   @HttpCode(204)
+  @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Delete or abort a video' })
   @ApiResponse({ status: 204, description: 'Video deleted' })
   async remove(
@@ -88,7 +101,9 @@ export class VideosController {
   @Public()
   @UseGuards(OptionalJwtGuard)
   @Get(':publicId/stream')
-  @ApiOperation({ summary: 'Stream the video (HTTP Range / 206 Partial Content)' })
+  @ApiOperation({
+    summary: 'Stream the video (HTTP Range / 206 Partial Content)',
+  })
   async stream(
     @CurrentUser() user: JwtPayload | undefined,
     @Param('publicId') publicId: string,

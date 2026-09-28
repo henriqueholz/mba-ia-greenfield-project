@@ -5,6 +5,7 @@ import { DataSource, type Repository } from 'typeorm';
 import { AppModule } from '../app.module';
 import { Channel } from '../channels/entities/channel.entity';
 import { VIDEO_PROCESSING_QUEUE } from '../queue/queue.constants';
+import { cleanAllTables } from '../test/create-test-data-source';
 import { User } from '../users/entities/user.entity';
 import { VideosController } from './videos.controller';
 import { Video, VideoStatus } from './entities/video.entity';
@@ -61,8 +62,7 @@ describe('VideosService (integration)', () => {
 
   beforeEach(async () => {
     await dataSource.query('DELETE FROM videos');
-    await dataSource.query('DELETE FROM channels');
-    await dataSource.query('DELETE FROM users');
+    await cleanAllTables(dataSource);
   });
 
   it('wires the module: VideosService and VideosController resolve', () => {
