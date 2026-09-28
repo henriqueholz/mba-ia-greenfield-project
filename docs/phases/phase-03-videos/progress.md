@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 8/9 completed
+**SIs:** 9/9 completed
 
 ### SI-03.1 — Infra: object storage, fila e worker no Docker Compose
 - **Status:** completed
@@ -70,6 +70,8 @@
   - Media endpoints (stream/download/thumbnail) 409 `VIDEO_NOT_READY` for non-ready non-owner; metadata 404s (no existence leak); malformed Range → 416 `INVALID_RANGE`.
 
 ### SI-03.9 — Backstop: limpeza de rascunhos abandonados
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 2 passing (draft-cleanup.service.integration-spec.ts)
+- **Observations:**
+  - `@nestjs/schedule@^6.1.3` (CJS, Nest 11 compatible); `ScheduleModule.forRoot()` in AppModule; `@Cron(EVERY_HOUR)` on `cleanupStaleDrafts` (TTL 24h).
+  - `cleanupStaleDrafts()` returns the count and is called directly in the test (the test module omits ScheduleModule so no live cron fires); it aborts multipart + deletes objects + removes stale `draft` rows past the TTL, leaving fresh drafts and non-draft videos intact.

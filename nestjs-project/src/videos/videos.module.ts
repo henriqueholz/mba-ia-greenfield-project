@@ -4,6 +4,7 @@ import { AuthModule } from '../auth/auth.module';
 import { ChannelsModule } from '../channels/channels.module';
 import { QueueModule } from '../queue/queue.module';
 import { StorageModule } from '../storage/storage.module';
+import { DraftCleanupService } from './draft-cleanup.service';
 import { Video } from './entities/video.entity';
 import { OptionalJwtGuard } from './guards/optional-jwt.guard';
 import { VideosController } from './videos.controller';
@@ -18,7 +19,7 @@ import { VideosService } from './videos.service';
     QueueModule,
   ],
   controllers: [VideosController],
-  providers: [VideosService, OptionalJwtGuard],
+  providers: [VideosService, OptionalJwtGuard, DraftCleanupService],
   exports: [VideosService],
 })
 export class VideosModule {}
